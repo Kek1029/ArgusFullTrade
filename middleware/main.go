@@ -2,28 +2,34 @@ package main
 
 import (
 	"fmt"
+	"middleware/Config"
 	"net/http"
-	"os"
 
-	bybit "github.com/bybit-exchange/bybit.go.api"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"middleware/BybitAPI"
 )
 
 func main() {
+	cfg, err := Config.GetConfigEnv()
+	if err != nil {
+		panic(err)
+	}
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Post("/route", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message": "Hello World"}`))
 	})
-	port, exists := os.LookupEnv("MIDDLEWARE_PORT")
-	if !exists {
-		port = "6132"
-	}
+	port := cfg.MiddlewarePort
 
-	err := http.ListenAndServe(fmt.Sprintf(":%s", port), r)
+	bybitApi := BybitAPI.New(cfg)
+	println(bybitApi.GetBalance())
+
+	err = http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 	if err != nil {
 		panic(err)
 	}
+
 }

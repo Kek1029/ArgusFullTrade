@@ -83,7 +83,6 @@ func (b bybitImpl) GetBalance() ([]Balance, error) {
 	}
 
 	return balances, nil
-
 }
 
 func (b bybitImpl) PlaceOrder(req OrderRequest) (OrderResponse, error) {
