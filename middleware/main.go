@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	bybit "github.com/bybit-exchange/bybit.go.api"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -20,6 +21,7 @@ func main() {
 	if !exists {
 		port = "6132"
 	}
+
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), r)
 	if err != nil {
 		panic(err)
