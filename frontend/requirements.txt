@@ -1,0 +1,5 @@
+aiogram
+requests
+fastapi
+uvicorn
+httpx

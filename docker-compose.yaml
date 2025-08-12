@@ -1,0 +1,52 @@
+#[frontend] → [middleware] → [backend]
+#                   ↓             ↓
+#                [redis] ←––––––––
+
+version: '3.8'
+
+services:
+  frontend:
+    build: frontend/
+    command: python main.py
+    ports:
+      - "6459:6459"
+    env_file:
+      - .env
+    depends_on:
+      - middleware
+
+  middleware:
+    build: middleware/
+    command: go run .
+    expose:
+      - "6132"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      - redis
+      - frontend
+
+  backend:
+    build: backend/
+    command: ./backend
+    expose:
+      - "6521"
+    env_file:
+      .env
+    environment:
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      - redis
+      - middleware
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    expose:
+      - "6379"
+    volumes:
+      - ./redisdata:/data
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD}
