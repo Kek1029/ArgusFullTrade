@@ -1,0 +1,267 @@
+version: "3.9"
+
+networks:
+  frontend-network:
+    driver: bridge
+  middleware-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+  global-network:
+    driver: bridge
+
+services:
+
+  # FRONTEND LAYER
+
+  frontend-core:
+    container_name: frontend-core
+    build: frontend/core
+    command: python main.py
+    ports:
+      - "6459:6459"
+    expose:
+      - "6459"
+    networks:
+      - frontend-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq-global:
+        condition: service_healthy
+
+  frontend-telegram:
+    container_name: frontend-telegram
+    build: frontend/telegram
+    command: python main.py
+    expose:
+      - "6541"
+    networks:
+      - frontend-network
+    env_file:
+      - .env
+    depends_on:
+      frontend-core:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  frontend-web:
+    container_name: frontend-web
+    build: frontend/web
+    command: python main.py
+    expose:
+      - "5713"
+    networks:
+      - frontend-network
+    env_file:
+      - .env
+    depends_on:
+      frontend-core:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  # MIDDLEWARE LAYER
+
+  middleware-core:
+    container_name: middleware-core
+    build: middleware/core
+    command: ./middleware-core
+    expose:
+      - "6132"
+    networks:
+      - middleware-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq-global:
+        condition: service_healthy
+      rabbitmq-local:
+        condition: service_healthy
+
+  middleware-bybit:
+    container_name: middleware-bybit
+    build: middleware/bybit
+    command: ./middleware-bybit
+    expose:
+      - "6135"
+    networks:
+      - middleware-network
+    env_file:
+      - .env
+    depends_on:
+      middleware-core:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  middleware-frontend:
+    container_name: middleware-frontend
+    build: middleware/frontend
+    command: ./middleware-frontend
+    expose:
+      - "6133"
+    networks:
+      - middleware-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      middleware-core:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  middleware-backend:
+    container_name: middleware-backend
+    build: middleware/backend
+    command: ./middleware-backend
+    expose:
+      - "6134"
+    networks:
+      - middleware-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      middleware-core:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  middleware-redis:
+    container_name: middleware-redis
+    build: middleware/redis
+    command: ./middleware-redis
+    expose:
+      - "6136"
+    networks:
+      - middleware-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      middleware-core:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  # BACKEND LAYER
+
+  backend-core:
+    container_name: backend-core
+    build: backend/core
+    command: ./backend-core
+    expose:
+      - "6521"
+    networks:
+      - backend-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq-local:
+        condition: service_healthy
+
+  backend-middleware:
+    container_name: backend-middleware
+    build: backend/middleware
+    command: ./backend-middleware
+    expose:
+      - "6522"
+    networks:
+      - backend-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      backend-core:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+
+  backend-redis:
+    container_name: backend-redis
+    build: backend/redis
+    command: ./backend-redis
+    expose:
+      - "6523"
+    networks:
+      - backend-network
+      - global-network
+    env_file:
+      - .env
+    depends_on:
+      backend-core:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq-local:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # REDIS
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    expose:
+      - "6379"
+    volumes:
+      - ./redisdata:/data
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - global-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # RABBITMQ BROKERS
+
+  rabbitmq-global:
+    container_name: rabbitmq-global
+    hostname: rabbitmq-global
+    image: rabbitmq:latest
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - global-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq-local:
+    container_name: rabbitmq-local
+    hostname: rabbitmq-local
+    image: rabbitmq:latest
+    expose:
+      - "5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - frontend-network
+      - middleware-network
+      - backend-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

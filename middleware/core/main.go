@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"middleware/config"
-	"net/http"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"middleware_core/Config"
+	"middleware_core/RabbitAPI"
 )
 
 func main() {
@@ -15,17 +12,54 @@ func main() {
 		panic(err)
 	}
 
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Post("/route", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"message": "Hello World"}`))
-	})
-	port := cfg.MiddlewareCorePort
+	globalBroker := RabbitAPI.NewURL(cfg.RabbitGlobalURL)
+	localBroker := RabbitAPI.NewURL(cfg.RabbitLocalURL)
 
-	err = http.ListenAndServe(fmt.Sprintf(":%d", port), r)
+	// Подписка на глобальные команды
+	binding := RabbitAPI.QueueBinding{
+		Exchange:   cfg.ExchangeName,
+		RoutingKey: cfg.MiddlewareRoutingKey,
+		QueueName:  cfg.MiddlewareQueue,
+		Durable:    true,
+		AutoDelete: false,
+	}
+
+	err = globalBroker.Subscribe(binding, func(msg RabbitAPI.BrokerMessage) error {
+		fmt.Println("Received global message:")
+		fmt.Println("Type:", msg.Type)
+		fmt.Println("Payload:", string(msg.Payload))
+		return routeToLocal(localBroker, cfg, msg)
+	})
 	if err != nil {
 		panic(err)
 	}
 
+	select {} // блокируем main
+}
+
+func routeToLocal(local RabbitAPI.IRabbitAPI, cfg *Config.Config, msg RabbitAPI.BrokerMessage) error {
+	var targetKey string
+
+	switch msg.Type {
+	case "order.bybit":
+		targetKey = cfg.BybitRoutingKey
+	case "order.backend":
+		targetKey = cfg.BackendRoutingKey
+	case "order.redis":
+		targetKey = cfg.RedisRoutingKey
+	case "order.frontend":
+		targetKey = cfg.FrontendRoutingKey
+	default:
+		fmt.Println("Unknown message type:", msg.Type)
+		return nil
+	}
+
+	err := local.Publish(cfg.ExchangeName, targetKey, msg)
+	if err != nil {
+		fmt.Println("Failed to route to local:", err)
+		return err
+	}
+
+	fmt.Println("Routed to local:", targetKey)
+	return nil
 }
