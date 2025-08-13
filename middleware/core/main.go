@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"middleware/Config"
+	"middleware/config"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"middleware/BybitAPI"
 )
 
 func main() {
@@ -22,10 +21,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message": "Hello World"}`))
 	})
-	port := cfg.MiddlewarePort
-
-	bybitApi := BybitAPI.New(cfg)
-	println(bybitApi.GetBalance())
+	port := cfg.MiddlewareCorePort
 
 	err = http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 	if err != nil {

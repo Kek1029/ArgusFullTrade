@@ -8,7 +8,7 @@ from env_config import get_config
 import httpx
 
 config = get_config()
-PORT = config["FASTAPI_PORT"]
+PORT = config["FRONTEND_CORE_PORT"]
 
 app = FastAPI()
 
@@ -27,7 +27,7 @@ async def route(req: RequestData):
 
     try:
         async with httpx.AsyncClient() as client:
-            middleware_port = config["MIDDLEWARE_PORT"]
+            middleware_port = config["MIDDLEWARE_CORE_PORT"]
             middleware_url = f"http://middleware:{middleware_port}/route"
             response = await client.post(url=middleware_url, json=req.data)
             logging.info(f"Response status: {response.status_code}, body: {response.text}")

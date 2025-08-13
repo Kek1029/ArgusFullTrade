@@ -1,4 +1,4 @@
-module middleware
+module middleware_core
 
 go 1.22.2
 
