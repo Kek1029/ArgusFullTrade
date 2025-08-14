@@ -11,7 +11,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
+    cfg.LogSummary()
 	globalBroker := RabbitAPI.NewURL(cfg.RabbitGlobalURL)
 
 	// Подписка на глобальные команды
@@ -24,15 +24,16 @@ func main() {
 	}
 
 	err = globalBroker.Subscribe(binding, func(msg RabbitAPI.BrokerMessage) error {
-		fmt.Println("Received global message:")
-		fmt.Println("Type:", msg.Type)
-		fmt.Println("Payload:", string(msg.Payload))
-		// Обработка сообщения тут
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
+        fmt.Println("Received global message:")
+        fmt.Println("Type:", msg.Type)
+        fmt.Println("Payload:", string(msg.Payload))
+        return nil
+    })
+    if err != nil {
+        fmt.Println("Subscribe error:", err)
+        panic(err)
+    }
+
 
 	select {} // блокируем main
 }

@@ -2,13 +2,14 @@
 import logging
 import os
 import asyncio
-import json
 import uvicorn
 import aio_pika
 from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import Dict, Optional
 from env_config import get_config
 
+# ─────────────────────────────────────────────
 config = get_config()
 PORT = config["FRONTEND_CORE_PORT"]
 
@@ -19,14 +20,20 @@ logging.basicConfig(
     filename="logs/frontend.log",
     filemode="w",
     level=logging.INFO,
-    format="%(asctime)s %(message)s"
+    format="%(asctime)s %(levelname)s %(message)s"
 )
 
+# ─────────────────────────────────────────────
 class RequestData(BaseModel):
     to: int
-    data: dict
+    data: Dict[str, str]
 
-# RabbitMQ connection (global)
+class BrokerMessage(BaseModel):
+    type: str
+    payload: RequestData
+    meta: Optional[Dict[str, str]] = None
+
+# ─────────────────────────────────────────────
 rabbit_connection = None
 rabbit_channel = None
 exchange = None
@@ -51,6 +58,7 @@ async def connect_rabbit(retries: int = 10, delay: int = 1):
             await asyncio.sleep(delay)
     raise RuntimeError("Cannot connect to RabbitMQ after multiple retries")
 
+# ─────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
     await connect_rabbit()
@@ -61,21 +69,26 @@ async def shutdown():
         await rabbit_connection.close()
         logging.info("RabbitMQ connection closed")
 
+# ─────────────────────────────────────────────
 @app.post("/route")
-async def route(req: RequestData):
+async def route(req: BrokerMessage):
     try:
-        payload = json.dumps(req.dict()).encode("utf-8")
+        body = req.model_dump_json().encode("utf-8")
+
         message = aio_pika.Message(
-            body=payload,
+            body=body,
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
+
         routing_key = "route.middleware"
         await exchange.publish(message, routing_key=routing_key)
-        logging.info(f"Published to {routing_key}: {payload}")
+
+        logging.info(f"Published to {routing_key}: {body.decode()}")
         return {"status": "OK", "detail": "Message published"}
     except Exception as e:
         logging.error(f"Publish error: {e}")
         return {"status": "ERROR", "detail": str(e)}
 
+# ─────────────────────────────────────────────
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=PORT)
