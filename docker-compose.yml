@@ -1,3 +1,5 @@
+version: "3.9"
+
 networks:
   frontend-network:
     driver: bridge
@@ -150,6 +152,9 @@ services:
       global-network:
     env_file:
       - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   backend-broker:
     container_name: backend-broker
