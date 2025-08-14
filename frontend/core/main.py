@@ -1,5 +1,7 @@
+# main.py
 import logging
 import os
+import asyncio
 import json
 import uvicorn
 import aio_pika
@@ -9,7 +11,6 @@ from env_config import get_config
 
 config = get_config()
 PORT = config["FRONTEND_CORE_PORT"]
-RABBITMQ_URL = config["RABBITMQ_GLOBAL_URL"]
 
 app = FastAPI()
 
@@ -30,22 +31,35 @@ rabbit_connection = None
 rabbit_channel = None
 exchange = None
 
+async def connect_rabbit(retries: int = 10, delay: int = 1):
+    global rabbit_connection, rabbit_channel, exchange
+    for i in range(retries):
+        try:
+            rabbit_connection = await aio_pika.connect_robust(
+                f"amqp://{config['RABBITMQ_USER']}:{config['RABBITMQ_PASS']}@{config['RABBITMQ_HOST']}:{config['RABBITMQ_PORT']}/"
+            )
+            rabbit_channel = await rabbit_connection.channel()
+            exchange = await rabbit_channel.declare_exchange(
+                "events",
+                aio_pika.ExchangeType.DIRECT,
+                durable=True
+            )
+            logging.info("Connected to RabbitMQ")
+            return
+        except Exception as e:
+            logging.warning(f"RabbitMQ connection failed ({i+1}/{retries}): {e}")
+            await asyncio.sleep(delay)
+    raise RuntimeError("Cannot connect to RabbitMQ after multiple retries")
+
 @app.on_event("startup")
 async def startup():
-    global rabbit_connection, rabbit_channel, exchange
-    rabbit_connection = await aio_pika.connect_robust(RABBITMQ_URL)
-    rabbit_channel = await rabbit_connection.channel()
-    exchange = await rabbit_channel.declare_exchange(
-        "events",
-        aio_pika.ExchangeType.DIRECT,
-        durable=True
-    )
-    logging.info("Connected to RabbitMQ Global")
+    await connect_rabbit()
 
 @app.on_event("shutdown")
 async def shutdown():
-    await rabbit_connection.close()
-    logging.info("RabbitMQ connection closed")
+    if rabbit_connection:
+        await rabbit_connection.close()
+        logging.info("RabbitMQ connection closed")
 
 @app.post("/route")
 async def route(req: RequestData):
