@@ -104,10 +104,10 @@ services:
       middleware-core:
         condition: service_started
 
-  middleware-backend:
-    container_name: middleware-backend
-    build: middleware/backend
-    command: ./middleware-backend
+  middleware-broker:
+    container_name: middleware-broker
+    build: middleware/broker
+    command: ./middleware-broker
     expose:
       - "6134"
     networks:
@@ -151,10 +151,10 @@ services:
     env_file:
       - .env
 
-  backend-middleware:
-    container_name: backend-middleware
-    build: backend/middleware
-    command: ./backend-middleware
+  backend-broker:
+    container_name: backend-broker
+    build: backend/broker
+    command: ./backend-broker
     expose:
       - "6522"
     networks:
