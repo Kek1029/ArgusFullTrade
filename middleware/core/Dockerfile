@@ -1,12 +1,8 @@
-FROM golang:1.22.2
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
-RUN go mod download
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-
-RUN go build -o middleware-core .
-
-CMD ["./middleware-core"]

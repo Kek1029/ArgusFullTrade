@@ -1,0 +1,62 @@
+import json
+from typing import Callable, Optional, Dict, Any
+from aio_pika import connect_robust, Message, ExchangeType
+from aio_pika.abc import AbstractIncomingMessage
+from pydantic import BaseModel
+
+
+class BrokerMessage(BaseModel):
+    type: str
+    payload: Dict[str, Any]
+    meta: Optional[Dict[str, str]] = None
+
+
+class QueueBinding(BaseModel):
+    exchange: str
+    routing_key: str
+    queue_name: str
+    durable: bool = True
+    auto_delete: bool = False
+
+
+class RabbitClient:
+    def __init__(self, url: str):
+        self.url = url
+        self.connection = None
+        self.channel = None
+
+    async def connect(self):
+        self.connection = await connect_robust(self.url)
+        self.channel = await self.connection.channel()
+
+    async def publish(self, exchange_name: str, routing_key: str, msg: BrokerMessage):
+        exchange = await self.channel.declare_exchange(exchange_name, ExchangeType.DIRECT, durable=True)
+        body = msg.model_dump_json().encode("utf-8")
+        await exchange.publish(
+            Message(body, content_type="application/json"),
+            routing_key=routing_key
+        )
+
+    async def subscribe(self, binding: QueueBinding, handler: Callable[[BrokerMessage], Any]):
+        exchange = await self.channel.declare_exchange(binding.exchange, ExchangeType.DIRECT, durable=True)
+        queue = await self.channel.declare_queue(
+            binding.queue_name,
+            durable=binding.durable,
+            auto_delete=binding.auto_delete
+        )
+        await queue.bind(exchange, routing_key=binding.routing_key)
+
+        async def on_message(message: AbstractIncomingMessage):
+            async with message.process():
+                try:
+                    data = json.loads(message.body)
+                    msg = BrokerMessage(**data)
+                    await handler(msg)
+                except Exception as e:
+                    print(f"Failed to handle message: {e}")
+
+        await queue.consume(on_message)
+
+    async def close(self):
+        await self.channel.close()
+        await self.connection.close()
