@@ -4,6 +4,7 @@ import os
 def get_config():
     return {
         "BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        "FRONTEND_CORE_IP": os.getenv("FRONTEND_INTERNAL_CORE_IP", "172.20.0.2"),
         "FRONTEND_CORE_PORT": int(os.getenv("FRONTEND_CORE_PORT", "6459")),
         "RABBITMQ_PORT": int(os.getenv("RABBITMQ_PORT", "5672")),
         "RABBITMQ_USER": os.getenv("RABBITMQ_USER", "guest"),
