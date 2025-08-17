@@ -38,6 +38,19 @@ rabbit_connection = None
 rabbit_channel = None
 exchange = None
 
+async def consume_frontend():
+    queue = await rabbit_channel.declare_queue("order.frontend", durable=True)
+    await queue.bind(exchange, routing_key="order.frontend")
+
+    async with queue.iterator() as queue_iter:
+        async for message in queue_iter:
+            async with message.process():
+                try:
+                    data = BrokerMessage.model_validate_json(message.body.decode())
+                    logging.info(f"📨 Received in frontend: {data.type} → {data.payload}")
+                except Exception as e:
+                    logging.error(f"❌ Failed to process frontend message: {e}")
+
 async def connect_rabbit(retries: int = 10, delay: int = 1):
     global rabbit_connection, rabbit_channel, exchange
     for i in range(retries):
@@ -62,6 +75,8 @@ async def connect_rabbit(retries: int = 10, delay: int = 1):
 @app.on_event("startup")
 async def startup():
     await connect_rabbit()
+    asyncio.create_task(consume_frontend())
+
 
 @app.on_event("shutdown")
 async def shutdown():

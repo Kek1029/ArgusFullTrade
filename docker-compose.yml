@@ -76,7 +76,7 @@ services:
   middleware-core:
     container_name: middleware-core
     build: middleware/core
-    command: ./middleware-core
+    command: python main.py
     expose:
       - "6132"
     networks:

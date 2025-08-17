@@ -3,6 +3,7 @@ from typing import Callable, Optional, Dict, Any
 from aio_pika import connect_robust, Message, ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
 from pydantic import BaseModel
+import logging
 
 
 class BrokerMessage(BaseModel):
@@ -49,11 +50,11 @@ class RabbitClient:
         async def on_message(message: AbstractIncomingMessage):
             async with message.process():
                 try:
-                    data = json.loads(message.body)
-                    msg = BrokerMessage(**data)
-                    await handler(msg)
+                    data = BrokerMessage.model_validate_json(message.body.decode())
+                    await handler(data)
                 except Exception as e:
-                    print(f"Failed to handle message: {e}")
+                    logging.error(f"Failed to process message: {e}")
+
 
         await queue.consume(on_message)
 

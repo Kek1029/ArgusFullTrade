@@ -1,1 +1,4 @@
 aio-pika
+pydantic
+fastapi
+uvicorn
